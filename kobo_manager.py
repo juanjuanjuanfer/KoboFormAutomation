@@ -1,6 +1,7 @@
 import requests
 from dataclasses import dataclass
 from typing import Optional, Dict, Any
+import json
 
 @dataclass
 class Choice:
@@ -138,3 +139,10 @@ class FormManager(KoboToolboxClient):
         
         print("Latest version already deployed")
         return True
+    def export_data(self):
+        response = self._get(f"assets/{self.asset_uid}/data.json")
+        response = response.json()
+        response = response["results"]
+        with open("data.json", "w") as f:
+            json.dump(response, f, indent=4)
+            

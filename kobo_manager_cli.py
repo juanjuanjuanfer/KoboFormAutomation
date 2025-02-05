@@ -9,7 +9,12 @@ from utils import (
 )
 from rich.panel import Panel
 import kobo_manager
-import autoupdater
+import os
+# Add this helper function
+import uuid
+
+def generate_kuid():
+    return str(uuid.uuid4())[:8].lower()
 
 def main():
     display_header()
@@ -47,7 +52,7 @@ def main():
         # Main application loop
         while True:
             console.print("\n[bold]Main Menu:")
-            console.print("1. View Form Structure\n2. Export Data\n3. Edit Choices\n4. Update and Redeploy \na. Autoupdater\ne. Exit")
+            console.print("1. View Form Structure\n2. Export Data\n3. Add Choices\n4. Update and Redeploy \na. Autoupdater\nao. Autocreate options.\ne. Exit")
             choice = console.input("[prompt]Select an option:[/] ")
             
             if choice == '1':
@@ -66,7 +71,7 @@ def main():
                 console.print("Data exported successfully", style="success")
 
             if choice == "3":
-                console.print("\nEdit Choices selected", style="info")
+                console.print("\nAdd Choices selected", style="info")
                 form_manager.fetch_form_structure()
                 console.print("Current choices:", style="info")
                 console.print(form_manager.asset_data["content"]["choices"])
@@ -94,7 +99,43 @@ def main():
 
             if choice == 'a':
                 console.print("Setting up autoupdater...", style="info")
-                autoupdater
+                os.system("python autoupdater.py")
+                console.print("Autoupdater started", style="success")
+
+
+            if choice == 'ao':
+                console.print("Starting auto-creation of options from database...", style="info")
+                
+                # Get existing list names from the form
+                form_manager.fetch_form_structure()
+                existing_lists = {c['list_name'] for c in form_manager.asset_data["content"]["choices"]}
+                
+                # Prompt user to select list name
+                list_name = console.input(
+                    f"[prompt]Enter target list name (existing: {', '.join(existing_lists)}): [/]"
+                )
+                
+                if list_name not in existing_lists:
+                    if console.input(f"List '{list_name}' doesn't exist. Create it? (y/N): ").lower() != 'y':
+                        console.print("Operation cancelled", style="warning")
+                        continue
+                        
+
+                try:
+                    with console.status("[bold green]Generating options from database..."):
+                        count = form_manager.autocreate_options_from_db(db_config, list_name)
+                        
+                    if count > 0:
+                        console.print(f"Added {count} new options to list '{list_name}'", style="success")
+                        if console.input("[prompt]Update and redeploy form? (Y/n): ").lower() == 'y':
+                            form_manager.update_form()
+                            form_manager.redeploy_form()
+                    else:
+                        console.print("No new options to add", style="warning")
+                        
+                except Exception as e:
+                    console.print(f"Error during auto-creation: {str(e)}", style="error")
+                            
 
             if choice == 'e':
                 if form_manager.needs_redeploy():

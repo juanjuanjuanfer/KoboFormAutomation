@@ -2,6 +2,11 @@ import requests
 from dataclasses import dataclass
 from typing import Optional, Dict, Any
 import json
+import psycopg2
+import uuid
+
+def generate_kuid():
+    return str(uuid.uuid4())[:8].lower()
 
 @dataclass
 class Choice:
@@ -145,4 +150,90 @@ class FormManager(KoboToolboxClient):
         response = response["results"]
         with open("data.json", "w") as f:
             json.dump(response, f, indent=4)
+    # Add this new method to your FormManager class
+    def autocreate_options_from_db(self, db_config, list_name):
+        """Auto-create form options from database entries using existing list_name"""
+        try:
+            connection = psycopg2.connect(**db_config)
+            cursor = connection.cursor()
             
+            # Get existing choices for the specified list
+            existing_choices = [
+                c for c in self.asset_data["content"]["choices"] 
+                if c['list_name'] == list_name
+            ]
+            
+            # Create a set of existing labels for comparison
+            existing_labels = {
+                c['label'][0].lower().strip()  # Normalize for comparison
+                for c in existing_choices
+            }
+            
+            # Get all names from database
+            cursor.execute('''
+                SELECT nombre, "apellido paterno", "apellido materno" 
+                FROM public."KoboOptionUpdateTest"
+            ''')
+            rows = cursor.fetchall()
+            
+            # Prepare new choices
+            new_choices = []
+            for nombre, paterno, materno in rows:
+                # Generate full label
+                full_label = f"{nombre} {paterno} {materno or ''}".strip()
+                normalized_label = full_label.lower()  # Normalize for comparison
+                
+                # Skip if label already exists
+                if normalized_label in existing_labels:
+                    continue
+                
+                # Generate base value
+                base_value = "_".join([
+                    nombre.lower().replace(" ", "_"),
+                    paterno.lower().replace(" ", "_"),
+                    (materno or "").lower().replace(" ", "_")
+                ]).strip("_")
+                
+                # Handle duplicates within the same list
+                counter = 1
+                value = base_value
+                while value in {c['name'] for c in existing_choices}:
+                    value = f"{base_value}_{counter}"
+                    counter += 1
+                    
+                # Create new choice
+                new_choice = {
+                    'list_name': list_name,
+                    'name': value,
+                    'label': [full_label],  # Array format
+                    '$kuid': generate_kuid(),
+                    '$autovalue': value
+                }
+                
+                new_choices.append(new_choice)
+                existing_labels.add(normalized_label)  # Add to existing labels
+            
+            # Show preview of new choices
+            if new_choices:
+                console.print("\n[bold]New options to be added:[/]")
+                for choice in new_choices:
+                    console.print(f"- {choice['label'][0]} → {choice['name']}")
+                
+                if console.input("\n[prompt]Add these options? (Y/n):[/] ").lower() != 'y':
+                    console.print("Operation cancelled", style="warning")
+                    return 0
+                
+                # Add new choices to form
+                self.asset_data["content"]["choices"].extend(new_choices)
+                self.needs_redeploy = True
+                return len(new_choices)
+            
+            console.print("No new options to add", style="warning")
+            return 0
+            
+        except psycopg2.Error as e:
+            console.print(f"Database error: {e}", style="error")
+            return 0
+        finally:
+            if connection:
+                connection.close()

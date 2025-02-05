@@ -25,23 +25,10 @@ console = Console(theme=custom_theme)
 def display_header():
     """Display the application header"""
     header = Text("""
-KOBO FORM AUTOMATION 
+\033[H\033[2J KOBO FORM AUTOMATION 
     """, style="header")
     console.print(header)
     console.print(Panel("KoboToolbox Form Management v1.0", style="info"))
-
-def typewriter_print(text: str, style: str = "default", speed: float = 0.03, end_delay: float = 0.5):
-    """Print text with typewriter effect"""
-    with console.capture() as capture:
-        console.print(text, style=style, end="")
-    captured = capture.get()
-    
-    with console:
-        for char in captured:
-            console.print(char, style=style, end="")
-            time.sleep(speed)
-    time.sleep(end_delay)
-    console.print()
 
 def validate_api_token(token: str) -> bool:
     """Validate API token format"""

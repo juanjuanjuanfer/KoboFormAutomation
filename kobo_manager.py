@@ -4,6 +4,14 @@ from typing import Optional, Dict, Any
 import json
 import psycopg2
 import uuid
+from utils import (
+    console,
+    display_header,
+    get_credentials,
+    save_credentials,
+    login_prompt
+)
+
 
 def generate_kuid():
     return str(uuid.uuid4())[:8].lower()
@@ -121,6 +129,8 @@ class FormManager(KoboToolboxClient):
         if response.status_code == 200:
             print(f"Successfully redeployed version {target_version}")
             self.deployed_version_id = target_version
+            input("Press Enter to continue...")
+            print("\033[2J")
             return True
             
         print(f"Redeployment failed: {response.text}")
@@ -195,11 +205,26 @@ class FormManager(KoboToolboxClient):
                 ]).strip("_")
                 
                 # Handle duplicates within the same list
+                # Store existing values once in a set
+                existing_values = {c['name'] for c in existing_choices}  
+
                 counter = 1
                 value = base_value
-                while value in {c['name'] for c in existing_choices}:
+
+                # Ensure the value is unique
+                while value in existing_values:
+
                     value = f"{base_value}_{counter}"
                     counter += 1
+                    
+                    # Safety limit to prevent infinite loop
+                    if counter > 10:  # Adjust the limit if necessary
+                        console.print("[bold red]Error: Too many duplicates, stopping to prevent infinite loop.[/]", style="error")
+                        return 0  # Or raise an exception
+
+                # Add the final unique value to the set to prevent further conflicts
+                existing_values.add(value)
+
                     
                 # Create new choice
                 new_choice = {
@@ -225,6 +250,13 @@ class FormManager(KoboToolboxClient):
                 
                 # Add new choices to form
                 self.asset_data["content"]["choices"].extend(new_choices)
+                
+                # Ensure form updates before redeployment
+                if not self.update_form():  # <-- Ensure new choices are registered
+                    console.print("[bold red]Form update failed. Fix errors before redeploying.[/]", style="error")
+                    return 0
+                
+                self.refresh_version_info()  # <-- Ensure latest version is known
                 self.needs_redeploy = True
                 return len(new_choices)
             

@@ -1,20 +1,16 @@
 import sys
+from rich.panel import Panel
+import kobo_manager
+import os
+from time import sleep
+
 from utils import (
     console,
     display_header,
-    typewriter_print,
     get_credentials,
     save_credentials,
     login_prompt
 )
-from rich.panel import Panel
-import kobo_manager
-import os
-# Add this helper function
-import uuid
-
-def generate_kuid():
-    return str(uuid.uuid4())[:8].lower()
 
 def main():
     display_header()
@@ -43,7 +39,7 @@ def main():
                 api_token=api_token,
                 asset_uid=asset_uid
             )
-        
+        print(f"\033[H\033[2J")
         console.print(Panel(
             f"Connected to project: [bold]{asset_uid}[/]",
             style="success"
@@ -52,25 +48,27 @@ def main():
         # Main application loop
         while True:
             console.print("\n[bold]Main Menu:")
-            console.print("1. View Form Structure\n2. Export Data\n3. Add Choices\n4. Update and Redeploy \na. Autoupdater\nao. Autocreate options.\ne. Exit")
-            choice = console.input("[prompt]Select an option:[/] ")
-            
-            if choice == '1':
+            console.print("[purple]VFS\t▓░▓\tView Form Structure\nED\t▓░▓\tExport Data\nAC\t▓░▓\tAdd Choices\nUR\t▓░▓\tUpdate and Redeploy \nA\t▓░▓\tAutoupdater\nAO\t▓░▓\tAutocreate Options.\nE\t▓░▓\tExit")
+            choice = console.input("\n[prompt]Select an option:[/] ")
+
+            if choice == 'VFS':
                 console.print("\nForm Structure selected", style="info")
                 form_manager.fetch_form_structure()
                 console.print("Survey structure:", style="info")
                 console.print(form_manager.asset_data["content"]["survey"])
-                input("Press Enter to continue...")
+                input("\033[7mPress Enter to continue...")
                 console.print("Choices:", style="info")
                 console.print(form_manager.asset_data["content"]["choices"])
+                input("\033[7mPress Enter to continue...")
+                print("\033[H\033[2J")
 
-            if choice == "2":
+            if choice == "ED":
                 console.print("\nExport Data selected", style="info")
                 console.print("Exporting data...")
                 form_manager.export_data()
                 console.print("Data exported successfully", style="success")
 
-            if choice == "3":
+            if choice == "AC":
                 console.print("\nAdd Choices selected", style="info")
                 form_manager.fetch_form_structure()
                 console.print("Current choices:", style="info")
@@ -90,20 +88,20 @@ def main():
                 console.print("Updated choices:", style="info")
                 console.print(form_manager.asset_data["content"]["choices"])
 
-            if choice == "4":
+            if choice == "UR":
                 console.print("\nUpdate and Redeploy selected", style="warning")
                 if form_manager.needs_redeploy is False:
                     console.print("No changes to deploy", style="warning")
                     continue
                 form_manager.redeploy_form()
 
-            if choice == 'a':
+            if choice == 'A':
                 console.print("Setting up autoupdater...", style="info")
                 os.system("python autoupdater.py")
                 console.print("Autoupdater started", style="success")
 
 
-            if choice == 'ao':
+            if choice == 'AO':
                 console.print("Starting auto-creation of options from database...", style="info")
                 
                 # Get existing list names from the form
@@ -120,24 +118,27 @@ def main():
                         console.print("Operation cancelled", style="warning")
                         continue
                         
-
+                # Database configuration
+                db_config = {
+                    'host': '',
+                    'port': 5432,
+                    'database': 'postgres',
+                    'user': '',
+                    'password': ''
+                }
+                
                 try:
-                    with console.status("[bold green]Generating options from database..."):
-                        count = form_manager.autocreate_options_from_db(db_config, list_name)
+                    console.print("[bold green]Generating options from database...")
+                    count = form_manager.autocreate_options_from_db(db_config, list_name)
                         
-                    if count > 0:
-                        console.print(f"Added {count} new options to list '{list_name}'", style="success")
-                        if console.input("[prompt]Update and redeploy form? (Y/n): ").lower() == 'y':
-                            form_manager.update_form()
-                            form_manager.redeploy_form()
-                    else:
-                        console.print("No new options to add", style="warning")
+                    if count > 0 and console.input("[prompt]Update and redeploy form? (Y/n): ").lower() == 'y':
+                        form_manager.update_form()
+                        form_manager.redeploy_form()
                         
                 except Exception as e:
-                    console.print(f"Error during auto-creation: {str(e)}", style="error")
-                            
+                    console.print(f"Error during auto-creation: {str(e)}", style="error")                            
 
-            if choice == 'e':
+            if choice == 'E':
                 if form_manager.needs_redeploy():
                     console.print(Panel(
                         "Unsaved changes detected - please update and redeploy before exiting",
@@ -145,9 +146,15 @@ def main():
                     ))
                     continue
                 console.print(Panel("Goodbye!", style="error"))
+                sleep(1)
+                print("\033[H\033[2J")
                 break
             
+            if choice == "":
+                print("\033[H\033[2J")
+
             console.print(f"Selected option {choice}", style="info")
+
             
     except Exception as e:
         console.print(Panel(

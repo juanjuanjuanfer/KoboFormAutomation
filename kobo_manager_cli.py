@@ -3,6 +3,9 @@ from rich.panel import Panel
 import kobo_manager
 import os
 from time import sleep
+from listener.webhook_listener import WebhookListener
+import signal
+
 
 from utils import (
     console,
@@ -12,25 +15,32 @@ from utils import (
     login_prompt
 )
 
+def handle_interrupt(signum, frame):
+    """Handle CTRL+C gracefully"""
+    sys.exit(0)  # Will trigger finally block
+
+signal.signal(signal.SIGINT, handle_interrupt)
+
+
 def main():
     display_header()
+    listener = None  # Regular variable in main scope
     
-    # Credential handling
-    credentials = get_credentials()
+    # ... rest of main function code ...
     
-    if credentials:
-        api_token, asset_uid = credentials
+    # Try environment variables first
+    api_token = os.getenv("KOBO_API_TOKEN")
+    asset_uid = os.getenv("ASSET_UID")
+    
+    if api_token and asset_uid:
         console.print(Panel(
-            f"Found credentials for project: [bold]{asset_uid}[/]",
+            "Using credentials from environment variables",
             style="success"
         ))
-        if console.input("[prompt]Use these credentials? (Y/n):[/] ").lower() == 'n':
-            api_token, asset_uid = login_prompt()
-            save_credentials(api_token, asset_uid)
     else:
-        console.print("No saved credentials found...", style="warning")
-        api_token, asset_uid = login_prompt()
-        save_credentials(api_token, asset_uid)
+        # Fall back to keyring storage
+        credentials = get_credentials()
+        # ... rest of existing flow
     
     # Connection attempt
     try:
@@ -39,7 +49,6 @@ def main():
                 api_token=api_token,
                 asset_uid=asset_uid
             )
-        print(f"\033[H\033[2J")
         console.print(Panel(
             f"Connected to project: [bold]{asset_uid}[/]",
             style="success"
@@ -96,9 +105,14 @@ def main():
                 form_manager.redeploy_form()
 
             if choice == 'A':
-                console.print("Setting up autoupdater...", style="info")
-                os.system("python autoupdater.py")
-                console.print("Autoupdater started", style="success")
+                try:
+                    listener = WebhookListener()
+                    console.print("Starting listener...", style="info")
+                    listener.start()
+                    console.input("Press Enter to stop listening...")
+                finally:
+                    if 'listener' in locals():
+                        listener.stop()
 
 
             if choice == 'AO':
@@ -120,11 +134,11 @@ def main():
                         
                 # Database configuration
                 db_config = {
-                    'host': '',
-                    'port': 5432,
-                    'database': 'postgres',
-                    'user': '',
-                    'password': ''
+                    'host': os.getenv("SUPABASE_HOST"),
+                    'port': os.getenv("SUPABASE_PORT", 5432),
+                    'database': os.getenv("SUPABASE_DB"),
+                    'user': os.getenv("SUPABASE_USER"),
+                    'password': os.getenv("SUPABASE_PASSWORD")
                 }
                 
                 try:
@@ -165,4 +179,10 @@ def main():
         sys.exit(1)
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        console.print("\n[bold red]Operation cancelled by user[/]")
+    finally:
+        # Any cleanup operations here
+        pass

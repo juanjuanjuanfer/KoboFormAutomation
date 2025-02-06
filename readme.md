@@ -23,14 +23,11 @@ git clone https://github.com/juanjuanjuanfer/KoboFormAutomation.git
 
 ### 🔧 Configuration
 
-``` python
-# Initialize with custom base URL
-form = FormManager(
-    api_token="your_token",
-    asset_uid="your_asset",
-    base_url="https://kobo.humanitarianresponse.info/api/v2/"
-)
-```
+#### Security Setup
+1. Install required packages: `pip install python-dotenv keyring`
+2. Copy `.env.example` to `.env` and fill in values
+3. Credentials will be stored in your system's secure credential store
+
 ### 🔄 Workflow Options
 
 1. Full Automation
